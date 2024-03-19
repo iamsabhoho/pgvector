@@ -72,7 +72,7 @@ data = np.load(DATA_PATH, allow_pickle=True)
 for i in tqdm(range(len(data))):
     s = str(list(data[i]))
     #print(s)
-    sql = "INSERT INTO test (i, embedding) VALUES ({}, '{}')".format(i, s)
+    sql = "INSERT INTO test (id, embedding) VALUES ({}, '{}')".format(i, s)
     #print(sql)
     cursor.execute(sql)
     #print("inserting {} vector".format(i))
