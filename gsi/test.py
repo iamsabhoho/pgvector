@@ -12,12 +12,26 @@ import os
 import pandas as pd
 import argparse
 
+
+
+
+#
+# configuration settings
+#
+DATA_PATH = "/home/gwilliams/Projects/GXL/deep-10K.npy"
+GT_DIR = "/mnt/nas1/fvs_benchmark_datasets"
+query_path = '/home/gwilliams/Projects/GXL/deep-queries-1000.npy'
+queries = np.load(query_path, allow_pickle=True)
+GT_PATH = os.path.join(GT_DIR, "deep-10K-gt-1000.npy")
+gt = np.load(GT_PATH, allow_pickle=True)
+
+
+
 # parse arguments
 parser = argparse.ArgumentParser("pgvector benchmarking tool.")
-parser.add_argument('-d','--dataset', required=True, help="dataset name like 'deep-10M'")
+parser.add_argument('-d','--dataset', required=True,help="dataset name like 'deep-10M'")
 parser.add_argument('-m',type=int, default=32) 
 parser.add_argument('-e',type=int, default=64) # ef construction
-parser.add_argument('-w','--workers', type=int, default=8)  # workers
 parser.add_argument('-o','--output', required=True, help="output directory")
 parser.add_argument('-c','--cpunodebind', type=int)
 parser.add_argument('-p','--preferred', type=int)
@@ -30,18 +44,6 @@ if os.path.exists( args.output ):
     raise Exception("ERROR: output directory already exists.")
 os.makedirs(args.output, exist_ok=False)
 print("Created directory at", args.output)
-
-#
-# configuration settings
-#
-
-DATA_PATH = "/home/gwilliams/Projects/GXL/{}.npy".format(args.dataset)
-GT_DIR = "/mnt/nas1/fvs_benchmark_datasets"
-query_path = '/home/gwilliams/Projects/GXL/deep-queries-1000.npy'
-queries = np.load(query_path, allow_pickle=True)
-GT_PATH = os.path.join(GT_DIR, "{}-gt-1000.npy").format(args.dataset)
-gt = np.load(GT_PATH, allow_pickle=True)
-
 
 #
 # helper functions
@@ -74,16 +76,15 @@ def size_num(s):
 # config
 #
 DIM = 96
-M = args.m
-EFC = args.e
-worker = args.workers
+M = 32
+EFC = 64
 results = []
 basename = os.path.basename(DATA_PATH).split(".")[0]
 numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
 
-save_path = './results/two/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
+save_path = './results/pgvector_%s_%d_%d.csv'%(basename, EFC, M)
 print("CSV save path=", save_path)
 
 
@@ -93,6 +94,13 @@ print(conn)
 
 # Creating a cursor object
 cursor = conn.cursor()
+
+"""# create new database
+# TODO
+sql = "CREATE DATABASE test"
+cursor.execute(sql)
+print("database created successfully!")"""
+
 
 # create if doesnt exist
 # enable extensions
@@ -104,7 +112,7 @@ print("created extensions")
 # create if does not exist
 # create table
 # TODO
-sql = "CREATE TABLE test (id bigserial PRIMARY KEY, embedding vector({}))".format(DIM)
+sql = "CREATE TABLE IF NOT EXISTS test (id bigserial PRIMARY KEY, embedding vector({}))".format(DIM)
 cursor.execute(sql)
 print("table created successfully!")
 
@@ -126,12 +134,6 @@ for i in tqdm(range(len(data))):
     #print("inserting {} vector".format(i))
 
 
-
-# set parallel workers
-sql = "SET max_parallel_maintenance_workers = {}".format(worker)
-cursor.execute(sql)
-print("set workers: ", worker)
-
 # create the HNSW index with cosine distance, M, and EFC on the table
 # TODO
 
@@ -145,7 +147,7 @@ print("hnsw index created successfully!")
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
         'walltime':(end_time-start_time).total_seconds(), 'units':'seconds',\
         'dataset':basename, 'numrecs':num_records,'ef_construction':EFC,\
-        'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker})
+        'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1})
 
 for ef in ef_search:
     sql = "SET hnsw.ef_search = {}".format(ef)
@@ -159,7 +161,6 @@ for ef in ef_search:
         q = str(list(query))
         start_time = datetime.datetime.now()
         sql = "SELECT id, (embedding <=> '{}') AS cosine_similarity FROM test ORDER BY cosine_similarity LIMIT 10".format(q)
-        ## 
         cursor.execute(sql)
         res = cursor.fetchall()
         end_time = datetime.datetime.now()
@@ -174,7 +175,7 @@ for ef in ef_search:
                 'end_time':end_time, 'walltime':((end_time-start_time).total_seconds() * 1000 ),\
                 'units':'milliseconds', 'dataset':basename, 'numrecs':num_records,\
                 'ef_construction':-1, 'M':-1, 'ef_search':ef, 'labels':lbl_lst, \
-                'distances':dist_lst, 'memory':-1, 'workers':-1})
+                'distances':dist_lst, 'memory':-1})
 
 df = pd.DataFrame(results)
 df.to_csv(save_path, sep="\t")
@@ -183,11 +184,11 @@ df = pd.read_csv(save_path, delimiter="\t")
 print(df.head())
 
 
-# delete table
+"""
+# delete database
 # TODO
-sql = "DROP TABLE test"
+sql = "DROP DATABASE test"
 cursor.execute(sql)
 print("table dropped successfully!")
-
-conn.commit()
+"""
 conn.close()
