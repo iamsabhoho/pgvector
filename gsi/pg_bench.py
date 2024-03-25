@@ -8,16 +8,18 @@ import psycopg2
 import numpy as np
 import datetime
 from tqdm import tqdm
-import os
+import os, sys
 import pandas as pd
 import argparse
+import traceback
 
 # parse arguments
 parser = argparse.ArgumentParser("pgvector benchmarking tool.")
 parser.add_argument('-d','--dataset', required=True, help="dataset name like 'deep-10M'")
-parser.add_argument('-m',type=int, default=32) 
+parser.add_argument('-m',type=int, default=16) 
 parser.add_argument('-e',type=int, default=64) # ef construction
-parser.add_argument('-w','--workers', type=int, default=8)  # workers
+parser.add_argument('-w','--workers', type=int, default=-1)  # workers
+parser.add_argument('-g','--mem', type=int, default=-1)
 parser.add_argument('-o','--output', required=True, help="output directory")
 parser.add_argument('-c','--cpunodebind', type=int)
 parser.add_argument('-p','--preferred', type=int)
@@ -26,10 +28,10 @@ args = parser.parse_args()
 print(args)
 
 # check output dir
-if os.path.exists( args.output ):
+"""if os.path.exists( args.output ):
     raise Exception("ERROR: output directory already exists.")
 os.makedirs(args.output, exist_ok=False)
-print("Created directory at", args.output)
+print("Created directory at", args.output)"""
 
 #
 # configuration settings
@@ -77,13 +79,14 @@ DIM = 96
 M = args.m
 EFC = args.e
 worker = args.workers
+mems = args.mem
 results = []
 basename = os.path.basename(DATA_PATH).split(".")[0]
 numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
 
-save_path = './results/two/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
+save_path = './results/three/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -125,12 +128,43 @@ for i in tqdm(range(len(data))):
     cursor.execute(sql)
     #print("inserting {} vector".format(i))
 
+add_time = datetime.datetime.now()
+print("insert time: ", (add_time-start_time).total_seconds())
 
 
-# set parallel workers
-sql = "SET max_parallel_maintenance_workers = {}".format(worker)
+if worker >= 0:
+    # set parallel workers
+    sql = "SET max_parallel_maintenance_workers = {}".format(worker)
+    cursor.execute(sql)
+
+    sql = "SET max_parallel_workers = {}".format(worker)
+    cursor.execute(sql)
+
+if mems >= 0:
+    sql = "SET maintenance_work_mem = '{}GB'".format(mems)
+    cursor.execute(sql)
+
+sql = "SET client_min_messages = DEBUG"
 cursor.execute(sql)
-print("set workers: ", worker)
+sql = "SHOW client_min_messages"
+cursor.execute(sql)
+print("client_min_messages: ", cursor.fetchall())
+
+
+# get number of maintenance workers
+sql = "SHOW max_parallel_maintenance_workers"
+cursor.execute(sql)
+print("max parallel maintenance workers: ", cursor.fetchall())
+
+# get number of workers
+sql = "SHOW max_parallel_workers"
+cursor.execute(sql)
+print("max parallel workers: ", cursor.fetchall())
+
+# get maintenance work mem
+sql = "SHOW maintenance_work_mem"
+cursor.execute(sql)
+print("maintenance work mem: ", cursor.fetchall())
 
 # create the HNSW index with cosine distance, M, and EFC on the table
 # TODO
@@ -141,6 +175,7 @@ cursor.execute(sql)
 end_time = datetime.datetime.now()
 
 print("hnsw index created successfully!")
+print("build time: ", (end_time-start_time).total_seconds())
 
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
         'walltime':(end_time-start_time).total_seconds(), 'units':'seconds',\
@@ -189,5 +224,11 @@ sql = "DROP TABLE test"
 cursor.execute(sql)
 print("table dropped successfully!")
 
-conn.commit()
-conn.close()
+try:
+    conn.commit()
+    conn.close()
+except:
+    traceback.print_exc()
+
+print("DONE")
+sys.exit(0)
