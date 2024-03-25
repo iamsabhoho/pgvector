@@ -86,7 +86,7 @@ numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
 
-save_path = './results/three/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
+save_path = './results/four/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -166,6 +166,12 @@ sql = "SHOW maintenance_work_mem"
 cursor.execute(sql)
 print("maintenance work mem: ", cursor.fetchall())
 
+# show shared buffers
+sql = "SHOW shared_buffers"
+cursor.execute(sql)
+buff = cursor.fetchall()
+print("shared buffers: ", buff)
+
 # create the HNSW index with cosine distance, M, and EFC on the table
 # TODO
 
@@ -180,7 +186,7 @@ print("build time: ", (end_time-start_time).total_seconds())
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
         'walltime':(end_time-start_time).total_seconds(), 'units':'seconds',\
         'dataset':basename, 'numrecs':num_records,'ef_construction':EFC,\
-        'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker})
+        'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker, 'buffer':buff})
 
 for ef in ef_search:
     sql = "SET hnsw.ef_search = {}".format(ef)
@@ -209,7 +215,7 @@ for ef in ef_search:
                 'end_time':end_time, 'walltime':((end_time-start_time).total_seconds() * 1000 ),\
                 'units':'milliseconds', 'dataset':basename, 'numrecs':num_records,\
                 'ef_construction':-1, 'M':-1, 'ef_search':ef, 'labels':lbl_lst, \
-                'distances':dist_lst, 'memory':-1, 'workers':-1})
+                'distances':dist_lst, 'memory':-1, 'workers':-1, 'buffer':buff})
 
 df = pd.DataFrame(results)
 df.to_csv(save_path, sep="\t")
