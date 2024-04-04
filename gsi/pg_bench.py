@@ -86,7 +86,7 @@ numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
 
-save_path = './results/four/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
+save_path = './results/five/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -184,7 +184,7 @@ print("hnsw index created successfully!")
 print("build time: ", (end_time-start_time).total_seconds())
 
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
-        'walltime':(end_time-start_time).total_seconds(), 'units':'seconds',\
+        'walltime':(end_time-start_time).total_seconds(), 'insert_time': (add_time-start_time).total_seconds(), 'units':'seconds',\
         'dataset':basename, 'numrecs':num_records,'ef_construction':EFC,\
         'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker, 'buffer':buff})
 
@@ -213,9 +213,9 @@ for ef in ef_search:
 
         results.append({'operation':'search', 'start_time':start_time, \
                 'end_time':end_time, 'walltime':((end_time-start_time).total_seconds() * 1000 ),\
-                'units':'milliseconds', 'dataset':basename, 'numrecs':num_records,\
+                'insert_time':-1, 'units':'milliseconds', 'dataset':basename, 'numrecs':num_records,\
                 'ef_construction':-1, 'M':-1, 'ef_search':ef, 'labels':lbl_lst, \
-                'distances':dist_lst, 'memory':-1, 'workers':-1, 'buffer':buff})
+                'distances':dist_lst, 'memory':-1, 'workers':worker, 'buffer':buff})
 
 df = pd.DataFrame(results)
 df.to_csv(save_path, sep="\t")
