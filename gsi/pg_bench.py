@@ -41,11 +41,19 @@ print("Created directory at", args.output)"""
 # configuration settings
 #
 
-DATA_PATH = "/home/sho/deep1b/{}.npy".format(args.dataset)
+# apu12
+"""DATA_PATH = "/home/sho/deep1b/{}.npy".format(args.dataset)
 GT_DIR = "/mnt/nas1/fvs_benchmark_datasets"
 query_path = '/home/gwilliams/Projects/GXL/deep-queries-1000.npy'
 queries = np.load(query_path, allow_pickle=True)
 GT_PATH = os.path.join(GT_DIR, "{}-gt-1000.npy").format(args.dataset)
+gt = np.load(GT_PATH, allow_pickle=True)"""
+
+# namibia
+DATA_PATH = "/home/sho/deep1b/{}.npy".format(args.dataset)
+query_path = '/home/sho/deep1b/deep-queries-1000.npy'
+queries = np.load(query_path, allow_pickle=True)
+GT_PATH = "/home/sho/deep1b/{}-gt-1000.npy".format(args.dataset)
 gt = np.load(GT_PATH, allow_pickle=True)
 
 
@@ -225,6 +233,7 @@ basename = os.path.basename(DATA_PATH).split(".")[0]
 numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
+pgvector_ver = '0.6.2'
 
 
 # validate/get info on files
@@ -235,7 +244,7 @@ print("file info=", finfo)
 
 # form the data CSV save path
 machine_name = platform.node()
-save_path = './results/five/pgvector_%s_%s_%d_%d_%d.csv'%(machine_name, basename, EFC, M, worker)
+save_path = './results/one/pgvector_%s_%s_%d_%d_%d.csv'%(machine_name, basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -333,10 +342,11 @@ print("hnsw index created successfully!")
 print("build time: ", (end_time-start_time).total_seconds())
 
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
-        'walltime':(end_time-start_time).total_seconds(), 'insert_time': (add_time-start_time).total_seconds(), 'units':'seconds',\
-        'dataset':basename, 'numrecs':num_records,'ef_construction':EFC,\
-        "dataset_finfo": finfo, \
-        'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker, 'buffer':buff})
+        'walltime':(end_time-start_time).total_seconds(), 'insert_time': (add_time-start_time).total_seconds(),\
+        'units':'seconds', 'dataset':basename, 'numrecs':num_records,\
+        'dataset_finfo': finfo, 'pgvector_ver': pgvector_ver,\
+        'ef_construction':EFC, 'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, \
+        'memory':-1, 'workers':worker, 'buffer':buff})
 
 for ef in ef_search:
     sql = "SET hnsw.ef_search = {}".format(ef)
@@ -364,6 +374,7 @@ for ef in ef_search:
         results.append({'operation':'search', 'start_time':start_time, \
                 'end_time':end_time, 'walltime':((end_time-start_time).total_seconds() * 1000 ),\
                 'insert_time':-1, 'units':'milliseconds', 'dataset':basename, 'numrecs':num_records,\
+                'dataset_finfo': finfo, 'pgvector_ver': pgvector_ver,\
                 'ef_construction':-1, 'M':-1, 'ef_search':ef, 'labels':lbl_lst, \
                 'distances':dist_lst, 'memory':-1, 'workers':worker, 'buffer':buff})
 
