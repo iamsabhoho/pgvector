@@ -12,6 +12,10 @@ import os, sys
 import pandas as pd
 import argparse
 import traceback
+from subprocess import run, check_output, Popen, PIPE, STDOUT
+import time
+import psutil
+import platform
 
 # parse arguments
 parser = argparse.ArgumentParser("pgvector benchmarking tool.")
@@ -25,7 +29,7 @@ parser.add_argument('-c','--cpunodebind', type=int)
 parser.add_argument('-p','--preferred', type=int)
 parser.add_argument('-r','--remove', action='store_true', default=False)
 args = parser.parse_args()
-print(args)
+print("args=",args)
 
 # check output dir
 """if os.path.exists( args.output ):
@@ -37,7 +41,7 @@ print("Created directory at", args.output)"""
 # configuration settings
 #
 
-DATA_PATH = "/home/gwilliams/Projects/GXL/{}.npy".format(args.dataset)
+DATA_PATH = "/home/sho/deep1b/{}.npy".format(args.dataset)
 GT_DIR = "/mnt/nas1/fvs_benchmark_datasets"
 query_path = '/home/gwilliams/Projects/GXL/deep-queries-1000.npy'
 queries = np.load(query_path, allow_pickle=True)
@@ -72,9 +76,145 @@ def size_num(s):
     elif s == '1000M': return 1000000000
     else: raise Exception("Unsupported size " + s)
 
+def get_source_info(file_path):
+    '''Get exhaustive information about a SAR source file'''
+
+    # make sure its the absolute path
+    abspath = os.path.abspath(file_path)
+
+    # get drive info of path
+    p = run("df %s" % abspath, shell=True, capture_output=True)
+    if (p.returncode!=0):
+        raise Exception("Could not retrieve hard drive info for file %s" % abspath)
+    drvinfo = p.stdout.decode().split("\n")[1].split()
+    if verbose: print("Drive info for %s" % abspath, "=", drvinfo)
+    if require_local_path and not drvinfo[0].startswith("/dev"):
+        raise Exception("Source file %s is not a local file" % abspath )
+
+    # prepare the dict return obj
+    return_dct = {'abspath':abspath, 'hdd': drvinfo[0]}
+
+    # locate partition information for file
+    partitions = psutil.disk_partitions()
+    found_partition = False
+    for partition in partitions:
+        if partition.device==drvinfo[0]:
+            found_partition=True
+            break
+    if not found_partition:
+        raise Exception("Could not location partition for %s" % abspath)
+
+    # get summary drives
+    cmd = "hwinfo --short --disk"
+    if verbose: print("Running cmd-",cmd)
+    p = run(cmd, shell=True, capture_output=True)
+    if p.returncode!=0:
+        raise Exception("Could not run 'hwinfo' - Are you sure its installed?")
+    drives_lines = p.stdout.decode().split("\n")
+    print(drives_lines)
+    drives = [ ln.strip().split()[0] for ln in drives_lines[1:] if ln.strip()!="" ]
+    drives_dct = {}
+    for drv in drives:
+        drives_dct[drv] = drv
+    print("Got hwinfo drives", drives_dct)
+
+    # get drive manufacturer info
+    #primdrv_part = ''.join("" if c.isdigit() else c for c in partition.device)
+    primdrv_part = partition.device
+    if verbose: print("Primary drive partition = ", primdrv_part)
+    primdrv = None
+    for drv in drives_dct.keys():
+        if verbose: print("drv compare =",drv,primdrv_part)
+        if primdrv_part.find(drv)==0:
+            primdrv = drv
+            if verbose: print("found!", drv, primdrv)
+            break
+    if primdrv == None:
+        raise Exception("Could not get primary drive info for " + partition.device +" " + primdrv_part)
+   
+    p = run("hwinfo --disk --only %s" % primdrv, shell=True, capture_output=True)
+    if p.returncode!=0:
+        raise Exception("Could not run 'hwinfo' - Are you sure its installed?")
+    hwinfos = [ el.strip() for el in p.stdout.decode().split("\n") ]
+    return_dct['model'] = None
+    return_dct['device'] = None
+    for hwinfo in hwinfos:
+        if hwinfo.startswith("Model:"): return_dct['model'] = hwinfo.split(":")[1].strip()
+        if hwinfo.startswith("Device:"): return_dct['device'] = hwinfo.split(":")[1].strip()
+
+    # get machine name
+    machine_name = platform.node()
+    return_dct['machine_name'] = machine_name
+
+    # get cpu info
+    processor_all = check_output("lscpu", shell=True).strip().decode()
+    processor = "".join( [ ln.split(":")[1].strip() for ln in processor_all.split("\n") if ln.startswith("Model name:") ] )
+    return_dct["processor"] = processor
+    cpu_count = psutil.cpu_count(logical=True)
+    return_dct["cpu_count"] = cpu_count
+    cpu_freq = psutil.cpu_freq()
+    return_dct["cpu_freq"] = str(cpu_freq)
+
+    # get memory info
+    mem_info = psutil.virtual_memory()
+    return_dct['mem'] = str(mem_info)
+
+    if verbose: print("returning source info=", return_dct)
+    return return_dct
+
+def get_leda_info( ):
+    '''Get LedaG card info.'''
+
+    slots = []
+
+    #
+    # This is gnarly code to invoke the ledagssh command,
+    # async capture the output, detect the ledagssh prompt,
+    # and send it the quit command, and capture any error
+    # code when the process exits.
+    #
+    cmd = ledagssh.split()
+    if verbose: print("\nRunning leda command", cmd, "\n" )
+    p = Popen( cmd, stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+    os.set_blocking(p.stdout.fileno(), False)
+    while True:
+        if p.poll()!=None:
+            if verbose: print("leda command terminated.")
+            if p.returncode!=0:
+                print("ERROR: Leda command returned error code %d" % p.returncode)
+                return False
+            else: break
+        b = p.stdout.readline()
+        if b==b'':
+            time.sleep(0.01)
+            continue
+        bs = b.decode('utf-8')
+        if verbose: print("leda output: %s" % bs, end="")
+        if bs.find("slot")>=0:
+            slots.append( bs )
+        if bs.startswith("localhost >"):
+            if verbose: print()
+            p.communicate( str.encode("quit") )
+
+    if verbose: print("ledag slot info:", slots)
+
+    # return number of boards and the board slot details array
+    return len(slots), slots
+
+
 #
 # config
 #
+
+# command to get LEDA card information
+ledagssh    =   "ledag-ssh -o localhost"
+
+# verbosity level
+verbose = True
+
+# whether or not to check for local file
+require_local_path = True
+
 DIM = 96
 M = args.m
 EFC = args.e
@@ -86,7 +226,16 @@ numrecs = basename.split("-")[1]
 num_records = size_num(numrecs)
 ef_search = [64, 128, 256, 512]
 
-save_path = './results/five/pgvector_%s_%d_%d_%d.csv'%(basename, EFC, M, worker)
+
+# validate/get info on files
+print("Getting file info for", DATA_PATH)
+finfo = get_source_info(DATA_PATH)
+print("file info=", finfo)
+
+
+# form the data CSV save path
+machine_name = platform.node()
+save_path = './results/five/pgvector_%s_%s_%d_%d_%d.csv'%(machine_name, basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -186,6 +335,7 @@ print("build time: ", (end_time-start_time).total_seconds())
 results.append({'operation':'build', 'start_time':start_time, 'end_time':end_time,\
         'walltime':(end_time-start_time).total_seconds(), 'insert_time': (add_time-start_time).total_seconds(), 'units':'seconds',\
         'dataset':basename, 'numrecs':num_records,'ef_construction':EFC,\
+        "dataset_finfo": finfo, \
         'M':M, 'ef_search':-1, 'labels':-1, 'distances':-1, 'memory':-1, 'workers':worker, 'buffer':buff})
 
 for ef in ef_search:
