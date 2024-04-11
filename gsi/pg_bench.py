@@ -28,8 +28,13 @@ parser.add_argument('-o','--output', required=True, help="output directory")
 parser.add_argument('-c','--cpunodebind', type=int)
 parser.add_argument('-p','--preferred', type=int)
 parser.add_argument('-r','--remove', action='store_true', default=False)
+parser.add_argument('-f','--stop_after_insert', action='store_true', default=False)
+parser.add_argument('-v','--verbose', action='store_true', default=False)
 args = parser.parse_args()
 print("args=",args)
+
+if args.verbose:
+    verbose = args.verbose
 
 # check output dir
 """if os.path.exists( args.output ):
@@ -244,7 +249,7 @@ print("file info=", finfo)
 
 # form the data CSV save path
 machine_name = platform.node()
-save_path = './results/one/pgvector_%s_%s_%d_%d_%d.csv'%(machine_name, basename, EFC, M, worker)
+save_path = './results/insert/pgvector_%s_%s_%d_%d_%d.csv'%(machine_name, basename, EFC, M, worker)
 print("CSV save path=", save_path)
 
 
@@ -282,13 +287,25 @@ for i in tqdm(range(len(data))):
     s = str(list(data[i]))
     #print(s)
     sql = "INSERT INTO test (id, embedding) VALUES ({}, '{}')".format(i, s)
-    #print(sql)
+    if verbose and i%10000==0:
+        print("about to insert: ", i, "th vector")
     cursor.execute(sql)
     #print("inserting {} vector".format(i))
 
 add_time = datetime.datetime.now()
 print("insert time: ", (add_time-start_time).total_seconds())
 
+
+if args.stop_after_insert:
+    print("stopping early..")
+    try:
+        conn.commit()
+        conn.close()
+    except:
+        traceback.print_exc()
+    sys.exit(0)
+
+#####
 
 if worker >= 0:
     # set parallel workers
