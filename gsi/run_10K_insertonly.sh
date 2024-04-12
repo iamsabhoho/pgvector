@@ -17,7 +17,8 @@ mkdir -p $OUTPUT
 
 # run pgvector
 DATASET="deep-10K"
-MEMORY=8
+MEMORY=100
+WORKERS=10
 echo "Running pgvector on $DATASET"
 echo "Writing output to $OUTPUT"
-python3 -u pg_bench.py --dataset $DATASET --output $OUTPUT --mem $MEMORY --stop_after_insert --verbose | tee "$OUTPUT/$DATASET.log"
+python -u pg_bench.py --dataset $DATASET --output $OUTPUT --mem $MEMORY --workers $WORKERS --stop_after_insert --verbose | tee "$OUTPUT/$DATASET.log"
