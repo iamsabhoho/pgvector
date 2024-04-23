@@ -4,8 +4,8 @@ SELECT * fROM pg_extension;
 
 select count(*) from test; 
 
-SET max_parallel_maintenance_workers = 10;
-SET max_parallel_workers = 10;
+SET max_parallel_maintenance_workers = 32;
+SET max_parallel_workers = 32;
 SET maintenance_work_mem = '100GB';
 
 show max_parallel_maintenance_workers;

@@ -4,7 +4,7 @@
 #
 
 # import postgres python package
-import psycopg2
+#import psycopg2
 import numpy as np
 import datetime
 from tqdm import tqdm
@@ -17,8 +17,8 @@ import time
 import psutil
 import platform
 
-#from pgvector.psycopg import register_vector
-#import psycopg
+from pgvector.psycopg import register_vector
+import psycopg
 
 # parse arguments
 parser = argparse.ArgumentParser("pgvector benchmarking tool.")
@@ -257,8 +257,8 @@ print("CSV save path=", save_path)
 
 
 # connect to local postgres server
-conn = psycopg2.connect("host=localhost port=5432 dbname=postgres user=postgres password=gsi4ever target_session_attrs=read-write")
-#conn = psycopg.connect("host=localhost port=5432 dbname=postgres user=postgres password=gsi4ever target_session_attrs=read-write")
+#conn = psycopg2.connect("host=localhost port=5432 dbname=postgres user=postgres password=gsi4ever target_session_attrs=read-write")
+conn = psycopg.connect("host=localhost port=5432 dbname=postgres user=postgres password=gsi4ever target_session_attrs=read-write")
 print(conn)
 
 # Creating a cursor object
@@ -270,6 +270,8 @@ cursor = conn.cursor()
 sql = "CREATE EXTENSION IF NOT EXISTS vector"
 cursor.execute(sql)
 print("created extensions")
+
+register_vector(conn)
 
 # create if does not exist
 # create table
@@ -289,31 +291,24 @@ start_time = datetime.datetime.now()
 
 print(f'Loading {len(data)} rows')
 
-for i in tqdm(range(len(data))):
     
-    """with cursor.copy('COPY test (embedding) FROM STDIN WITH (FORMAT BINARY)') as copy:
-        copy.set_types(['vector'])
+with cursor.copy('COPY test (embedding) FROM STDIN WITH (FORMAT BINARY)') as copy:
+    #copy.set_types(['vector'])
 
-        for i, embedding in enumerate(data):
-            # show progress
-            if i % 10000 == 0:
-                print('.', end='', flush=True)
+    for j, embedding in enumerate(data):
+        # show progress
+        if j % 10000 == 0:
+            print('.', end='', flush=True)
+        embedding = embedding.tostring()
+        print(embedding)
 
-            copy.write_row([embedding])
+        copy.write_row([embedding])
 
-            # flush data
-            while conn.pgconn.flush() == 1:
-                pass
+        # flush data
+        while conn.pgconn.flush() == 1:
+            pass
 
-    print('\nSuccess!')"""
-
-    s = str(list(data[i]))
-    #print(s)
-    sql = "INSERT INTO test (id, embedding) VALUES ({}, '{}')".format(i, s)
-    if verbose and i%10000==0:
-        print("about to insert: ", i, "th vector")
-    cursor.execute(sql)
-    #print("inserting {} vector".format(i))
+print('\nSuccess!')
 
 add_time = datetime.datetime.now()
 print("insert time: ", (add_time-start_time).total_seconds())

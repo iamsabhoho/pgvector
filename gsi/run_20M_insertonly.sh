@@ -9,7 +9,7 @@ set -x
 
 # get name of timestamped output dir
 TIMESTAMP=$(date +%s)
-OUTPUT="/tmp/gxl_$TIMESTAMP"
+OUTPUT="./results/output_insert/gxl_$TIMESTAMP"
 mkdir -p $OUTPUT
 #
 # Run pgvector commands
@@ -18,7 +18,7 @@ mkdir -p $OUTPUT
 # run pgvector
 DATASET="deep-20M"
 MEMORY=100
-WORKERS=10
+WORKERS=32
 echo "Running pgvector on $DATASET"
 echo "Writing output to $OUTPUT"
 python -u pg_bench.py --dataset $DATASET --output $OUTPUT --mem $MEMORY --workers $WORKERS --stop_after_insert --verbose | tee "$OUTPUT/$DATASET.log"
