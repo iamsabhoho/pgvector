@@ -286,27 +286,27 @@ print("table created successfully!")
 # TODO
 # load embeddings
 data = np.load(DATA_PATH, allow_pickle=True)
+print(data.dtype, data.shape)
 
 start_time = datetime.datetime.now()
 
 print(f'Loading {len(data)} rows')
-
+cur = conn.cursor()
     
-with cursor.copy('COPY test (embedding) FROM STDIN WITH (FORMAT BINARY)') as copy:
-    #copy.set_types(['vector'])
+with cur.copy('COPY test (embedding) FROM STDIN WITH (FORMAT BINARY)') as copy:
+    copy.set_types(['vector'])
 
     for j, embedding in enumerate(data):
         # show progress
         if j % 10000 == 0:
             print('.', end='', flush=True)
-        embedding = embedding.tostring()
-        print(embedding)
 
         copy.write_row([embedding])
 
         # flush data
         while conn.pgconn.flush() == 1:
             pass
+
 
 print('\nSuccess!')
 
