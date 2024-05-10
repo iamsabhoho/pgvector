@@ -6,7 +6,8 @@ select count(*) from test;
 
 SET max_parallel_maintenance_workers = 32;
 SET max_parallel_workers = 32;
-SET maintenance_work_mem = '100GB';
+-- value 100GB, change to 250GB for 250M
+SET maintenance_work_mem = '250GB';
 
 show max_parallel_maintenance_workers;
 show max_parallel_workers;
